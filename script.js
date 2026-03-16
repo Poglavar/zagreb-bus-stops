@@ -1,0 +1,294 @@
+// Basic setup
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb); // Sky blue background
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(5, 5, 5);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+document.getElementById('container').appendChild(renderer.domElement);
+
+// UI Elements
+const dateDisplay = document.getElementById('date-display');
+const timeDisplay = document.getElementById('time-display');
+const sunriseDisplay = document.getElementById('sunrise-display');
+const sunsetDisplay = document.getElementById('sunset-display');
+const pauseButton = document.getElementById('pause-button');
+const statusEmoji = document.getElementById('status-emoji');
+const timelineCanvas = document.getElementById('timeline-canvas');
+const timelineCtx = timelineCanvas.getContext('2d');
+const timelineSunriseLabel = document.getElementById('timeline-sunrise-label');
+const timelineSunsetLabel = document.getElementById('timeline-sunset-label');
+const timelineMarkersContainer = document.getElementById('timeline-markers');
+const datePicker = document.getElementById('date-picker');
+
+// Hide old labels
+sunriseDisplay.style.display = 'none';
+sunsetDisplay.style.display = 'none';
+
+// --- State Management ---
+let isPaused = false;
+let isRotateMode = false;
+let isDragging = false;
+let previousMouseX = 0;
+let simulationDate = new Date(); // New state for the simulation date
+
+// Initialize date picker
+datePicker.value = simulationDate.toISOString().split('T')[0];
+
+// Controls
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+// Ground
+const groundGeometry = new THREE.PlaneGeometry(20, 20);
+const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x808080, side: THREE.DoubleSide });
+const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// --- Bus Station Group (Shelter + Person) ---
+const busStation = new THREE.Group();
+scene.add(busStation);
+
+// Shelter
+const material = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, transparent: true, opacity: 0.8 });
+const backWall = new THREE.Mesh(new THREE.BoxGeometry(4, 2, 0.1), material);
+backWall.position.set(0, 1, -1);
+backWall.castShadow = true;
+busStation.add(backWall);
+const sideWall1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2, 2), material);
+sideWall1.position.set(-2, 1, 0);
+sideWall1.castShadow = true;
+busStation.add(sideWall1);
+const sideWall2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2, 2), material);
+sideWall2.position.set(2, 1, 0);
+sideWall2.castShadow = true;
+busStation.add(sideWall2);
+const roof = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.1, 2.2), material);
+roof.position.set(0, 2.05, 0);
+roof.castShadow = true;
+busStation.add(roof);
+
+// Person model
+const person = new THREE.Group();
+const bodyHeight = 1.6;
+const personHeadRadius = 0.1;
+const personMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+const bodyGeometry = new THREE.CylinderGeometry(0.2, 0.2, bodyHeight, 16);
+const body = new THREE.Mesh(bodyGeometry, personMaterial);
+body.position.y = bodyHeight / 2;
+person.add(body);
+const headGeometry = new THREE.SphereGeometry(personHeadRadius, 32, 32);
+const head = new THREE.Mesh(headGeometry, personMaterial);
+head.position.y = bodyHeight + personHeadRadius;
+person.add(head);
+person.position.set(0, 0, 0);
+busStation.add(person); // Add person to the station group
+
+// --- North Arrow (Static) ---
+const northArrow = new THREE.ArrowHelper(
+    new THREE.Vector3(0, 0, -1), // Direction (North)
+    new THREE.Vector3(0, 0.1, 0),  // Origin
+    10,                           // Length
+    0xff0000,                     // Color
+    1.0,                          // Head Length
+    0.3                           // Head Width
+);
+scene.add(northArrow);
+
+// --- Lights & Sun ---
+const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+scene.add(ambientLight);
+const sunLight = new THREE.DirectionalLight(0xffffff, 1);
+sunLight.castShadow = true;
+sunLight.shadow.camera.top = 10;
+sunLight.shadow.camera.bottom = -10;
+sunLight.shadow.camera.left = -10;
+sunLight.shadow.camera.right = 10;
+sunLight.shadow.camera.near = 0.5;
+sunLight.shadow.camera.far = 50;
+scene.add(sunLight);
+const sunGeometry = new THREE.SphereGeometry(0.15, 32, 32);
+const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+const sunSphere = new THREE.Mesh(sunGeometry, sunMaterial);
+scene.add(sunSphere);
+
+// --- Core Logic ---
+const raycaster = new THREE.Raycaster();
+const headPosition = new THREE.Vector3();
+const lat = 45.8150; // Zagreb latitude
+const lon = 15.9819; // Zagreb longitude
+
+function updateSunPosition(date) {
+    const sunPosition = SunCalc.getPosition(date, lat, lon);
+    const altitude = sunPosition.altitude;
+    const azimuth = sunPosition.azimuth; // Azimuth from south, westward
+
+    // Convert azimuth/altitude to 3D vector in our scene (Y-up, -Z North)
+    // Suncalc's azimuth is from South (0) to West (PI/2).
+    // Our scene's South is +Z, West is -X.
+    const sunDirection = new THREE.Vector3(
+        Math.cos(altitude) * -Math.sin(azimuth),
+        Math.sin(altitude),
+        Math.cos(altitude) * Math.cos(azimuth)
+    );
+
+    sunLight.position.copy(sunDirection).multiplyScalar(20);
+    sunLight.target = busStation;
+    sunSphere.position.copy(sunDirection).multiplyScalar(8);
+}
+
+function checkHeadInShade() {
+    head.getWorldPosition(headPosition);
+    const sunDirection = new THREE.Vector3().subVectors(sunSphere.position, headPosition).normalize();
+    raycaster.set(headPosition, sunDirection);
+    const intersects = raycaster.intersectObjects(busStation.children);
+    return intersects.length > 0;
+}
+
+// --- Timeline Logic ---
+let lastShadeStatus = null;
+let lastProgress = 0;
+
+function formatTime(date) {
+    return date.toTimeString().split(' ')[0].substring(0, 5);
+}
+
+function resetTimeline(sunrise, sunset) {
+    const canvas = timelineCtx.canvas;
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    timelineCtx.clearRect(0, 0, canvas.width, canvas.height);
+    timelineMarkersContainer.innerHTML = '';
+    timelineSunriseLabel.textContent = `Sunrise: ${formatTime(sunrise)}`;
+    timelineSunsetLabel.textContent = `Sunset: ${formatTime(sunset)}`;
+    lastShadeStatus = null;
+    lastProgress = 0;
+}
+
+function drawOnTimeline(progress, isShaded) {
+    const canvas = timelineCtx.canvas;
+    const x = progress * canvas.width;
+    timelineCtx.strokeStyle = isShaded ? 'lime' : 'red';
+    timelineCtx.lineWidth = 2;
+    timelineCtx.beginPath();
+    timelineCtx.moveTo(x, 0);
+    timelineCtx.lineTo(x, canvas.height);
+    timelineCtx.stroke();
+}
+
+function addTimelineMarker(progress, timeString) {
+    const marker = document.createElement('div');
+    marker.className = 'timeline-marker';
+    marker.textContent = timeString.substring(0, 5);
+    marker.style.left = `${progress * 100}%`;
+    timelineMarkersContainer.appendChild(marker);
+    const canvas = timelineCtx.canvas;
+    const x = progress * canvas.width;
+    timelineCtx.strokeStyle = 'black';
+    timelineCtx.lineWidth = 2;
+    timelineCtx.beginPath();
+    timelineCtx.moveTo(x, 0);
+    timelineCtx.lineTo(x, canvas.height);
+    timelineCtx.stroke();
+}
+
+// --- Animation Loop ---
+function animate() {
+    requestAnimationFrame(animate);
+
+    if (isPaused) {
+        controls.update();
+        renderer.render(scene, camera);
+        return;
+    }
+
+    const times = SunCalc.getTimes(simulationDate, lat, lon);
+    const sunrise = times.sunrise.getTime();
+    const sunset = times.sunset.getTime();
+    const animationDuration = 10000;
+    const progress = (Date.now() % animationDuration) / animationDuration;
+    const time = new Date(sunrise + (sunset - sunrise) * progress);
+
+    if (progress < lastProgress) {
+        resetTimeline(times.sunrise, times.sunset);
+    }
+    lastProgress = progress;
+
+    updateSunPosition(time);
+
+    // Update UI
+    const timeString = formatTime(time);
+    dateDisplay.textContent = `Date: ${simulationDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}`;
+    timeDisplay.textContent = `Time: ${timeString}`;
+
+    const isShaded = checkHeadInShade();
+    statusEmoji.textContent = isShaded ? '😊' : '😞';
+
+    // Update Timeline
+    drawOnTimeline(progress, isShaded);
+    if (lastShadeStatus !== null && isShaded !== lastShadeStatus) {
+        addTimelineMarker(progress, timeString);
+    }
+    lastShadeStatus = isShaded;
+
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+// --- Event Listeners ---
+pauseButton.addEventListener('click', () => {
+    isPaused = !isPaused;
+    pauseButton.textContent = isPaused ? 'Resume' : 'Pause';
+});
+
+datePicker.addEventListener('input', (event) => {
+    simulationDate = new Date(event.target.value);
+    // The date from the picker is UTC midnight, so adjust to local noon to avoid timezone issues.
+    simulationDate.setMinutes(simulationDate.getMinutes() + simulationDate.getTimezoneOffset());
+    const times = SunCalc.getTimes(simulationDate, lat, lon);
+    resetTimeline(times.sunrise, times.sunset);
+});
+
+renderer.domElement.addEventListener('click', () => {
+    if (isDragging) return; // Don't toggle mode if we just finished a drag
+    isRotateMode = !isRotateMode;
+    controls.enabled = !isRotateMode;
+    renderer.domElement.style.cursor = isRotateMode ? 'ew-resize' : 'auto';
+});
+
+renderer.domElement.addEventListener('mousemove', (event) => {
+    if (!isRotateMode) return;
+
+    // Get intersection point on the ground plane
+    const mouse = new THREE.Vector2();
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObject(ground);
+
+    if (intersects.length > 0) {
+        const intersectionPoint = intersects[0].point;
+        // Calculate angle from center to mouse point and set station rotation
+        const angle = Math.atan2(
+            intersectionPoint.x - busStation.position.x,
+            intersectionPoint.z - busStation.position.z
+        );
+        busStation.rotation.y = angle;
+    }
+});
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    const canvas = timelineCtx.canvas;
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+}, false);
+
+animate(); 

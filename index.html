@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bus Stop Sun Shade Simulator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="container"></div>
+    <div id="controls-container">
+        <div id="date-display"></div>
+        <input type="date" id="date-picker">
+        <div id="time-display"></div>
+        <div id="sunrise-display"></div>
+        <div id="sunset-display"></div>
+        <button id="pause-button">Pause</button>
+    </div>
+    <div id="status-emoji"></div>
+
+    <div id="info-container">
+        <p><strong>Position:</strong> Zagreb</p>
+        <p><strong>Latitude:</strong> 45.8150&deg; N</p>
+        <p><strong>Longitude:</strong> 15.9819&deg; E</p>
+        <p><strong>Description:</strong> This tool helps analyze whether a public transport stop will shade occupants
+            from the sun or not. The person inside is 1.70m tall, and the emoji and the status bar change depending on
+            whether their head is in the shade.</p>
+        <p><strong>Instructions:</strong> Red arrow is north. You can use the mouse to rotate the view, or rotate the
+            station's position. One click to enter the rotation mode, subsequent click to exit it.</p>
+    </div>
+
+    <div id="timeline-container">
+        <div id="timeline-labels">
+            <span id="timeline-sunrise-label"></span>
+            <span id="timeline-sunset-label"></span>
+        </div>
+        <div id="timeline-bar-wrapper">
+            <canvas id="timeline-canvas"></canvas>
+            <div id="timeline-markers"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.8.0/suncalc.min.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
