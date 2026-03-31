@@ -120,8 +120,8 @@ scene.add(sunSphere);
 // --- Core Logic ---
 const raycaster = new THREE.Raycaster();
 const headPosition = new THREE.Vector3();
-const lat = 45.8150; // Zagreb latitude
-const lon = 15.9819; // Zagreb longitude
+let lat = 45.8150; // Zagreb latitude
+let lon = 15.9819; // Zagreb longitude
 
 function updateSunPosition(date) {
     const sunPosition = SunCalc.getPosition(date, lat, lon);
@@ -291,4 +291,130 @@ window.addEventListener('resize', () => {
     canvas.height = canvas.clientHeight;
 }, false);
 
-animate(); 
+animate();
+
+// --- Bus Stop Data & Station Selector ---
+const stationSearch = document.getElementById('station-search');
+const stationDropdown = document.getElementById('station-dropdown');
+const infoPosition = document.getElementById('info-position');
+const infoLat = document.getElementById('info-lat');
+const infoLon = document.getElementById('info-lon');
+const infoFacing = document.getElementById('info-facing');
+
+let busStops = [];
+let highlightedIndex = -1;
+
+function cardinalDir(deg) {
+    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    return dirs[Math.round(deg / 45) % 8];
+}
+
+function orientationToRotationY(orientationDeg) {
+    return Math.PI - (orientationDeg * Math.PI / 180);
+}
+
+function selectStop(stop) {
+    lat = stop.lat;
+    lon = stop.lon;
+    busStation.rotation.y = orientationToRotationY(stop.orientationDeg);
+
+    // Reset timeline for new position
+    const times = SunCalc.getTimes(simulationDate, lat, lon);
+    resetTimeline(times.sunrise, times.sunset);
+
+    // Update info panel
+    infoPosition.textContent = stop.name;
+    infoLat.textContent = stop.lat.toFixed(4);
+    infoLon.textContent = stop.lon.toFixed(4);
+    infoFacing.textContent = `${cardinalDir(stop.orientationDeg)} (${stop.orientationDeg}°)`;
+
+    stationSearch.value = stop.displayName;
+    stationDropdown.style.display = 'none';
+}
+
+function renderDropdown(matches) {
+    stationDropdown.innerHTML = '';
+    highlightedIndex = -1;
+    if (matches.length === 0) {
+        stationDropdown.style.display = 'none';
+        return;
+    }
+    const shown = matches.slice(0, 50);
+    shown.forEach((stop, i) => {
+        const div = document.createElement('div');
+        div.className = 'station-option';
+        div.innerHTML = `${stop.displayName}<br><span class="station-meta">${stop.roadDistanceM}m from road · facing ${cardinalDir(stop.orientationDeg)}</span>`;
+        div.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            selectStop(stop);
+        });
+        stationDropdown.appendChild(div);
+    });
+    if (matches.length > 50) {
+        const more = document.createElement('div');
+        more.className = 'station-option station-meta';
+        more.textContent = `... and ${matches.length - 50} more. Keep typing to narrow down.`;
+        stationDropdown.appendChild(more);
+    }
+    stationDropdown.style.display = 'block';
+}
+
+stationSearch.addEventListener('input', () => {
+    const query = stationSearch.value.toLowerCase().trim();
+    if (query.length < 2) {
+        stationDropdown.style.display = 'none';
+        return;
+    }
+    const matches = busStops.filter(s =>
+        s.name.toLowerCase().includes(query) ||
+        s.displayName.toLowerCase().includes(query)
+    );
+    renderDropdown(matches);
+});
+
+stationSearch.addEventListener('focus', () => {
+    if (stationSearch.value.length >= 2) {
+        stationSearch.dispatchEvent(new Event('input'));
+    }
+});
+
+stationSearch.addEventListener('blur', () => {
+    setTimeout(() => { stationDropdown.style.display = 'none'; }, 150);
+});
+
+stationSearch.addEventListener('keydown', (e) => {
+    const options = stationDropdown.querySelectorAll('.station-option:not(.station-meta)');
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        highlightedIndex = Math.min(highlightedIndex + 1, options.length - 1);
+        options.forEach((o, i) => o.classList.toggle('highlighted', i === highlightedIndex));
+        if (options[highlightedIndex]) options[highlightedIndex].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        highlightedIndex = Math.max(highlightedIndex - 1, 0);
+        options.forEach((o, i) => o.classList.toggle('highlighted', i === highlightedIndex));
+        if (options[highlightedIndex]) options[highlightedIndex].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (highlightedIndex >= 0 && highlightedIndex < options.length) {
+            options[highlightedIndex].dispatchEvent(new MouseEvent('mousedown'));
+        }
+    } else if (e.key === 'Escape') {
+        stationDropdown.style.display = 'none';
+        stationSearch.blur();
+    }
+});
+
+// Load bus stop data
+fetch('data/zagreb-bus-stops.json')
+    .then(r => r.json())
+    .then(data => {
+        busStops = data;
+        console.log(`Loaded ${busStops.length} bus stops`);
+        stationSearch.placeholder = `Search ${busStops.length} bus stops...`;
+    })
+    .catch(err => {
+        console.warn('Could not load bus stop data:', err);
+        stationSearch.placeholder = 'Bus stop data not available';
+        stationSearch.disabled = true;
+    }); 

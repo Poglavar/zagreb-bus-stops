@@ -22,6 +22,58 @@ body {
     gap: 5px;
 }
 
+#station-selector {
+    position: relative;
+    margin-bottom: 5px;
+}
+
+#station-search {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #555;
+    border-radius: 3px;
+    background-color: #333;
+    color: white;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+#station-search::placeholder {
+    color: #999;
+}
+
+#station-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 250px;
+    overflow-y: auto;
+    background-color: #222;
+    border: 1px solid #555;
+    border-top: none;
+    border-radius: 0 0 3px 3px;
+    z-index: 1000;
+}
+
+.station-option {
+    padding: 6px 8px;
+    cursor: pointer;
+    font-size: 12px;
+    border-bottom: 1px solid #333;
+}
+
+.station-option:hover,
+.station-option.highlighted {
+    background-color: #444;
+}
+
+.station-option .station-meta {
+    color: #999;
+    font-size: 11px;
+}
+
 #time-display, #date-display, #sunrise-display, #sunset-display {
     margin-bottom: 5px;
 }
@@ -51,7 +103,7 @@ body {
 
 #info-container {
     position: absolute;
-    top: 155px;
+    top: 195px;
     left: 10px;
     width: 250px;
     background-color: rgba(0, 0, 0, 0.5);

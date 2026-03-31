@@ -11,6 +11,10 @@
 <body>
     <div id="container"></div>
     <div id="controls-container">
+        <div id="station-selector">
+            <input type="text" id="station-search" placeholder="Search bus stops..." autocomplete="off">
+            <div id="station-dropdown"></div>
+        </div>
         <div id="date-display"></div>
         <input type="date" id="date-picker">
         <div id="time-display"></div>
@@ -21,9 +25,10 @@
     <div id="status-emoji"></div>
 
     <div id="info-container">
-        <p><strong>Position:</strong> Zagreb</p>
-        <p><strong>Latitude:</strong> 45.8150&deg; N</p>
-        <p><strong>Longitude:</strong> 15.9819&deg; E</p>
+        <p><strong>Position:</strong> <span id="info-position">Zagreb</span></p>
+        <p><strong>Latitude:</strong> <span id="info-lat">45.8150</span>&deg; N</p>
+        <p><strong>Longitude:</strong> <span id="info-lon">15.9819</span>&deg; E</p>
+        <p><strong>Facing:</strong> <span id="info-facing">—</span></p>
         <p><strong>Description:</strong> This tool helps analyze whether a public transport stop will shade occupants
             from the sun or not. The person inside is 1.70m tall, and the emoji and the status bar change depending on
             whether their head is in the shade.</p>
