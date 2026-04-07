@@ -388,7 +388,9 @@ function loadBuildings(lat, lon) {
 
     clearBuildings();
 
-    fetch(`/api/buildings?lat=${lat}&lon=${lon}&radius=${BUILDING_RADIUS}`, {
+    const isLocal = !window.location.hostname.includes('zagreb.lol');
+    const apiBase = isLocal ? `http://${window.location.hostname}:3001` : '';
+    fetch(`${apiBase}/api/buildings-bus?lat=${lat}&lon=${lon}&radius=${BUILDING_RADIUS}`, {
         signal: buildingFetchController.signal
     })
         .then(r => r.json())
