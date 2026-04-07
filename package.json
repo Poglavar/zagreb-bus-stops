@@ -1,0 +1,28 @@
+{
+  "name": "zagreb-bus-stops",
+  "version": "1.0.0",
+  "description": "",
+  "main": "script.js",
+  "scripts": {
+    "start": "node server.js",
+    "import-buildings": "node scripts/import-buildings.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Poglavar/zagreb-bus-stops.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Poglavar/zagreb-bus-stops/issues"
+  },
+  "homepage": "https://github.com/Poglavar/zagreb-bus-stops#readme",
+  "dependencies": {
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
+    "pg": "^8.20.0"
+  }
+}

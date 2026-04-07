@@ -43,7 +43,7 @@ datePicker.value = simulationDate.toISOString().split('T')[0];
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 
 // Ground
-const groundGeometry = new THREE.PlaneGeometry(20, 20);
+const groundGeometry = new THREE.PlaneGeometry(300, 300);
 const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x808080, side: THREE.DoubleSide });
 const ground = new THREE.Mesh(groundGeometry, groundMaterial);
 ground.rotation.x = -Math.PI / 2;
@@ -53,6 +53,10 @@ scene.add(ground);
 // --- Bus Station Group (Shelter + Person) ---
 const busStation = new THREE.Group();
 scene.add(busStation);
+
+// --- Buildings Group (loaded dynamically per stop) ---
+const buildingsGroup = new THREE.Group();
+scene.add(buildingsGroup);
 
 // Shelter
 const material = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, transparent: true, opacity: 0.8 });
@@ -105,12 +109,14 @@ const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
 scene.add(ambientLight);
 const sunLight = new THREE.DirectionalLight(0xffffff, 1);
 sunLight.castShadow = true;
-sunLight.shadow.camera.top = 10;
-sunLight.shadow.camera.bottom = -10;
-sunLight.shadow.camera.left = -10;
-sunLight.shadow.camera.right = 10;
+sunLight.shadow.camera.top = 150;
+sunLight.shadow.camera.bottom = -150;
+sunLight.shadow.camera.left = -150;
+sunLight.shadow.camera.right = 150;
 sunLight.shadow.camera.near = 0.5;
-sunLight.shadow.camera.far = 50;
+sunLight.shadow.camera.far = 500;
+sunLight.shadow.mapSize.width = 2048;
+sunLight.shadow.mapSize.height = 2048;
 scene.add(sunLight);
 const sunGeometry = new THREE.SphereGeometry(0.15, 32, 32);
 const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
@@ -137,16 +143,17 @@ function updateSunPosition(date) {
         Math.cos(altitude) * Math.cos(azimuth)
     );
 
-    sunLight.position.copy(sunDirection).multiplyScalar(20);
+    sunLight.position.copy(sunDirection).multiplyScalar(200);
     sunLight.target = busStation;
-    sunSphere.position.copy(sunDirection).multiplyScalar(8);
+    sunSphere.position.copy(sunDirection).multiplyScalar(50);
 }
 
 function checkHeadInShade() {
     head.getWorldPosition(headPosition);
     const sunDirection = new THREE.Vector3().subVectors(sunSphere.position, headPosition).normalize();
     raycaster.set(headPosition, sunDirection);
-    const intersects = raycaster.intersectObjects(busStation.children);
+    const shadeObjects = [...busStation.children, ...buildingsGroup.children];
+    const intersects = raycaster.intersectObjects(shadeObjects);
     return intersects.length > 0;
 }
 
@@ -313,6 +320,103 @@ function orientationToRotationY(orientationDeg) {
     return Math.PI - (orientationDeg * Math.PI / 180);
 }
 
+// --- Building Loading & Rendering ---
+const BUILDING_RADIUS = 100; // meters
+const buildingMaterial = new THREE.MeshStandardMaterial({
+    color: 0xd4c4a8,
+    transparent: true,
+    opacity: 0.85
+});
+
+// Convert WGS84 lat/lon to local scene coordinates (meters from center)
+// In the scene: +X = East, -Z = North, Y = up
+function geoToLocal(lon, lat, centerLon, centerLat) {
+    const DEG_TO_RAD = Math.PI / 180;
+    const R = 6371000; // Earth radius in meters
+    const cosLat = Math.cos(centerLat * DEG_TO_RAD);
+    const dx = (lon - centerLon) * DEG_TO_RAD * R * cosLat; // East-West in meters
+    const dz = -(lat - centerLat) * DEG_TO_RAD * R;         // North-South (negated: +lat = north = -Z)
+    return { x: dx, z: dz };
+}
+
+function clearBuildings() {
+    while (buildingsGroup.children.length > 0) {
+        const mesh = buildingsGroup.children[0];
+        mesh.geometry.dispose();
+        buildingsGroup.remove(mesh);
+    }
+}
+
+function createBuildingMesh(polygon, zDelta, centerLon, centerLat) {
+    // polygon.coordinates[0] is the outer ring: [[lon, lat], ...]
+    const ring = polygon.coordinates[0];
+    const shape = new THREE.Shape();
+
+    for (let i = 0; i < ring.length; i++) {
+        const p = geoToLocal(ring[i][0], ring[i][1], centerLon, centerLat);
+        if (i === 0) {
+            shape.moveTo(p.x, -p.z); // Shape is 2D (x, y), we'll rotate to XZ plane
+        } else {
+            shape.lineTo(p.x, -p.z);
+        }
+    }
+
+    const height = Math.max(zDelta || 3, 1); // minimum 1m height
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth: height,
+        bevelEnabled: false
+    });
+
+    // ExtrudeGeometry extrudes along +Z by default.
+    // We need to rotate it so extrusion goes along +Y (up).
+    geometry.rotateX(-Math.PI / 2);
+
+    const mesh = new THREE.Mesh(geometry, buildingMaterial);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+}
+
+let buildingFetchController = null;
+
+function loadBuildings(lat, lon) {
+    // Abort any in-flight request
+    if (buildingFetchController) {
+        buildingFetchController.abort();
+    }
+    buildingFetchController = new AbortController();
+
+    clearBuildings();
+
+    fetch(`/api/buildings?lat=${lat}&lon=${lon}&radius=${BUILDING_RADIUS}`, {
+        signal: buildingFetchController.signal
+    })
+        .then(r => r.json())
+        .then(data => {
+            console.log(`Loaded ${data.features.length} buildings within ${BUILDING_RADIUS}m`);
+            for (const feature of data.features) {
+                const geom = feature.geometry;
+                const zDelta = feature.properties.z_delta;
+
+                if (geom.type === 'Polygon') {
+                    const mesh = createBuildingMesh(geom, zDelta, lon, lat);
+                    buildingsGroup.add(mesh);
+                } else if (geom.type === 'MultiPolygon') {
+                    for (const polygonCoords of geom.coordinates) {
+                        const polygon = { type: 'Polygon', coordinates: polygonCoords };
+                        const mesh = createBuildingMesh(polygon, zDelta, lon, lat);
+                        buildingsGroup.add(mesh);
+                    }
+                }
+            }
+        })
+        .catch(err => {
+            if (err.name !== 'AbortError') {
+                console.warn('Could not load buildings:', err);
+            }
+        });
+}
+
 function selectStop(stop) {
     lat = stop.lat;
     lon = stop.lon;
@@ -330,6 +434,9 @@ function selectStop(stop) {
 
     stationSearch.value = stop.displayName;
     stationDropdown.style.display = 'none';
+
+    // Load surrounding buildings for shade calculation
+    loadBuildings(stop.lat, stop.lon);
 }
 
 function renderDropdown(matches) {
@@ -412,6 +519,10 @@ fetch('data/zagreb-bus-stops.json')
         busStops = data;
         console.log(`Loaded ${busStops.length} bus stops`);
         stationSearch.placeholder = `Search ${busStops.length} bus stops...`;
+
+        // Default to Selska (→W) on initial load
+        const defaultStop = busStops.find(s => s.displayName === 'Selska (→W)');
+        if (defaultStop) selectStop(defaultStop);
     })
     .catch(err => {
         console.warn('Could not load bus stop data:', err);
