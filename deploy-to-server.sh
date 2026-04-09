@@ -19,4 +19,12 @@ rsync -avz --delete --chmod=Fu=rw,Fgo=r,Du=rwx,Dgo=rx \
   -e "ssh -i $SSH_KEY" \
   "$PROJECT_DIR/" "$REMOTE_SSH:$REMOTE_DIR/"
 
-echo "Deploy complete."
+# Cache-bust: inject ?v=<timestamp> on local asset references in index.html.
+# index.html itself is not cached by Cloudflare (DYNAMIC), so new URLs take effect immediately.
+VERSION="$(date +%s)"
+ssh -i "$SSH_KEY" "$REMOTE_SSH" "sed -i \
+  -e 's|href=\"style.css[^\"]*\"|href=\"style.css?v=${VERSION}\"|' \
+  -e 's|src=\"script.js[^\"]*\"|src=\"script.js?v=${VERSION}\"|' \
+  '${REMOTE_DIR}/index.html'"
+
+echo "Deploy complete (cache-bust v=${VERSION})."
