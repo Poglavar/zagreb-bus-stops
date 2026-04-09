@@ -12,7 +12,6 @@ renderer.shadowMap.enabled = true;
 document.getElementById('container').appendChild(renderer.domElement);
 
 // UI Elements
-const dateDisplay = document.getElementById('date-display');
 const timeDisplay = document.getElementById('time-display');
 const sunriseDisplay = document.getElementById('sunrise-display');
 const sunsetDisplay = document.getElementById('sunset-display');
@@ -171,8 +170,8 @@ function resetTimeline(sunrise, sunset) {
     canvas.height = canvas.clientHeight;
     timelineCtx.clearRect(0, 0, canvas.width, canvas.height);
     timelineMarkersContainer.innerHTML = '';
-    timelineSunriseLabel.textContent = `Sunrise: ${formatTime(sunrise)}`;
-    timelineSunsetLabel.textContent = `Sunset: ${formatTime(sunset)}`;
+    timelineSunriseLabel.textContent = `Izlazak sunca: ${formatTime(sunrise)}`;
+    timelineSunsetLabel.textContent = `Zalazak sunca: ${formatTime(sunset)}`;
     lastShadeStatus = null;
     lastProgress = 0;
 }
@@ -230,8 +229,7 @@ function animate() {
 
     // Update UI
     const timeString = formatTime(time);
-    dateDisplay.textContent = `Date: ${simulationDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}`;
-    timeDisplay.textContent = `Time: ${timeString}`;
+    timeDisplay.textContent = `Vrijeme: ${timeString}`;
 
     const isShaded = checkHeadInShade();
     statusEmoji.textContent = isShaded ? '😊' : '😞';
@@ -250,7 +248,17 @@ function animate() {
 // --- Event Listeners ---
 pauseButton.addEventListener('click', () => {
     isPaused = !isPaused;
-    pauseButton.textContent = isPaused ? 'Resume' : 'Pause';
+    pauseButton.textContent = isPaused ? 'Nastavi' : 'Pauza';
+});
+
+// Info panel toggle (collapsed by default on mobile)
+const infoToggle = document.getElementById('info-toggle');
+const infoContainer = document.getElementById('info-container');
+if (window.matchMedia('(max-width: 600px)').matches) {
+    infoContainer.classList.add('hidden');
+}
+infoToggle.addEventListener('click', () => {
+    infoContainer.classList.toggle('hidden');
 });
 
 datePicker.addEventListener('input', (event) => {
@@ -312,7 +320,7 @@ let busStops = [];
 let highlightedIndex = -1;
 
 function cardinalDir(deg) {
-    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const dirs = ['S', 'SI', 'I', 'JI', 'J', 'JZ', 'Z', 'SZ'];
     return dirs[Math.round(deg / 45) % 8];
 }
 
@@ -452,7 +460,7 @@ function renderDropdown(matches) {
     shown.forEach((stop, i) => {
         const div = document.createElement('div');
         div.className = 'station-option';
-        div.innerHTML = `${stop.displayName}<br><span class="station-meta">${stop.roadDistanceM}m from road · facing ${cardinalDir(stop.orientationDeg)}</span>`;
+        div.innerHTML = `${stop.displayName}<br><span class="station-meta">${stop.roadDistanceM}m od ceste · smjer ${cardinalDir(stop.orientationDeg)}</span>`;
         div.addEventListener('mousedown', (e) => {
             e.preventDefault();
             selectStop(stop);
@@ -462,7 +470,7 @@ function renderDropdown(matches) {
     if (matches.length > 50) {
         const more = document.createElement('div');
         more.className = 'station-option station-meta';
-        more.textContent = `... and ${matches.length - 50} more. Keep typing to narrow down.`;
+        more.textContent = `... i još ${matches.length - 50}. Nastavite tipkati za suženje pretrage.`;
         stationDropdown.appendChild(more);
     }
     stationDropdown.style.display = 'block';
@@ -514,20 +522,29 @@ stationSearch.addEventListener('keydown', (e) => {
     }
 });
 
+// Translate English cardinal abbreviations baked into displayName to Croatian
+const CARDINAL_EN_TO_HR = {
+    'NE': 'SI', 'NW': 'SZ', 'SE': 'JI', 'SW': 'JZ',
+    'N': 'S', 'S': 'J', 'E': 'I', 'W': 'Z'
+};
+function translateDisplayName(name) {
+    return name.replace(/→(NE|NW|SE|SW|N|S|E|W)/g, (_, d) => `→${CARDINAL_EN_TO_HR[d]}`);
+}
+
 // Load bus stop data
 fetch('data/zagreb-bus-stops.json')
     .then(r => r.json())
     .then(data => {
-        busStops = data;
+        busStops = data.map(s => ({ ...s, displayName: translateDisplayName(s.displayName) }));
         console.log(`Loaded ${busStops.length} bus stops`);
-        stationSearch.placeholder = `Search ${busStops.length} bus stops...`;
+        stationSearch.placeholder = `Pretraži ${busStops.length} stajališta...`;
 
-        // Default to Selska (→W) on initial load
-        const defaultStop = busStops.find(s => s.displayName === 'Selska (→W)');
+        // Default to Selska (→Z) on initial load
+        const defaultStop = busStops.find(s => s.displayName === 'Selska (→Z)');
         if (defaultStop) selectStop(defaultStop);
     })
     .catch(err => {
         console.warn('Could not load bus stop data:', err);
-        stationSearch.placeholder = 'Bus stop data not available';
+        stationSearch.placeholder = 'Podaci o stajalištima nisu dostupni';
         stationSearch.disabled = true;
-    }); 
+    });

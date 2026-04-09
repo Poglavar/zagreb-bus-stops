@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hr">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bus Stop Sun Shade Simulator</title>
+    <title>Simulator sjene autobusnih stajališta</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -12,28 +12,25 @@
     <div id="container"></div>
     <div id="controls-container">
         <div id="station-selector">
-            <input type="text" id="station-search" placeholder="Search bus stops..." autocomplete="off">
+            <input type="text" id="station-search" placeholder="Pretraži stajališta..." autocomplete="off">
             <div id="station-dropdown"></div>
         </div>
-        <div id="date-display"></div>
         <input type="date" id="date-picker">
         <div id="time-display"></div>
         <div id="sunrise-display"></div>
         <div id="sunset-display"></div>
-        <button id="pause-button">Pause</button>
+        <button id="pause-button">Pauza</button>
     </div>
     <div id="status-emoji"></div>
 
+    <button id="info-toggle" aria-label="Info">ℹ️</button>
     <div id="info-container">
-        <p><strong>Position:</strong> <span id="info-position">Zagreb</span></p>
-        <p><strong>Latitude:</strong> <span id="info-lat">45.8150</span>&deg; N</p>
-        <p><strong>Longitude:</strong> <span id="info-lon">15.9819</span>&deg; E</p>
-        <p><strong>Facing:</strong> <span id="info-facing">—</span></p>
-        <p><strong>Description:</strong> This tool helps analyze whether a public transport stop will shade occupants
-            from the sun or not. The person inside is 1.70m tall, and the emoji and the status bar change depending on
-            whether their head is in the shade.</p>
-        <p><strong>Instructions:</strong> Red arrow is north. You can use the mouse to rotate the view, or rotate the
-            station's position. One click to enter the rotation mode, subsequent click to exit it.</p>
+        <p><strong>Lokacija:</strong> <span id="info-position">Zagreb</span></p>
+        <p><strong>Geografska širina:</strong> <span id="info-lat">45.8150</span>&deg; N</p>
+        <p><strong>Geografska dužina:</strong> <span id="info-lon">15.9819</span>&deg; E</p>
+        <p><strong>Smjer:</strong> <span id="info-facing">—</span></p>
+        <p><strong>Opis:</strong> Ovaj alat pomaže analizirati hoće li stajalište javnog prijevoza zasjeniti putnike od sunca. Osoba unutra visoka je 1.70m, a emoji i statusna traka mijenjaju se ovisno o tome je li glava u sjeni.</p>
+        <p><strong>Upute:</strong> Crvena strelica pokazuje sjever. Mišem možete rotirati pogled ili položaj stajališta. Jedan klik za ulazak u način rotacije, sljedeći klik za izlaz.</p>
     </div>
 
     <div id="timeline-container">
