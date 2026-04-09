@@ -103,6 +103,10 @@ body {
     min-width: 0;
 }
 
+#time-row #time-display {
+    text-align: center;
+}
+
 #pause-button {
     padding: 6px 8px;
     border: 1px solid #555;
@@ -166,8 +170,8 @@ body {
 
 @media (max-width: 600px) {
     #controls-container {
-        width: calc(100vw - 80px);
-        max-width: 260px;
+        width: 170px;
+        max-width: calc(100vw - 80px);
         padding: 8px;
     }
 
