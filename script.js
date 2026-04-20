@@ -261,6 +261,26 @@ infoToggle.addEventListener('click', () => {
     infoContainer.classList.toggle('hidden');
 });
 
+// Share button: copies the current URL (with ?id=<id>) to the clipboard.
+const shareToggle = document.getElementById('share-toggle');
+shareToggle.addEventListener('click', async () => {
+    if (currentStop?.id != null) {
+        history.replaceState(null, '', `${location.pathname}?id=${currentStop.id}`);
+    }
+    try {
+        await navigator.clipboard.writeText(location.href);
+        const original = shareToggle.textContent;
+        shareToggle.textContent = '✓';
+        shareToggle.classList.add('copied');
+        setTimeout(() => {
+            shareToggle.textContent = original;
+            shareToggle.classList.remove('copied');
+        }, 1500);
+    } catch (err) {
+        console.error('clipboard write failed:', err);
+    }
+});
+
 datePicker.addEventListener('input', (event) => {
     simulationDate = new Date(event.target.value);
     // The date from the picker is UTC midnight, so adjust to local noon to avoid timezone issues.
@@ -427,7 +447,11 @@ function loadBuildings(lat, lon) {
         });
 }
 
+// Tracks the currently selected stop so the share button can link to it.
+let currentStop = null;
+
 function selectStop(stop) {
+    currentStop = stop;
     lat = stop.lat;
     lon = stop.lon;
     busStation.rotation.y = orientationToRotationY(stop.orientationDeg);
@@ -444,6 +468,11 @@ function selectStop(stop) {
 
     stationSearch.value = stop.displayName;
     stationDropdown.style.display = 'none';
+
+    // Mirror the selection into the URL so the stop is shareable.
+    if (stop.id != null) {
+        history.replaceState(null, '', `${location.pathname}?id=${stop.id}`);
+    }
 
     // Load surrounding buildings for shade calculation
     loadBuildings(stop.lat, stop.lon);
@@ -539,9 +568,12 @@ fetch('data/zagreb-bus-stops.json')
         console.log(`Loaded ${busStops.length} bus stops`);
         stationSearch.placeholder = `Pretraži ${busStops.length} stajališta...`;
 
-        // Default to Selska (→Z) on initial load
-        const defaultStop = busStops.find(s => s.displayName === 'Selska (→Z)');
-        if (defaultStop) selectStop(defaultStop);
+        // Prefer a stop from ?id=<id> so shared links land on the right stop;
+        // fall back to Selska (→Z) as the default landing stop.
+        const requestedId = parseInt(new URLSearchParams(location.search).get('id'), 10);
+        const initialStop = (Number.isFinite(requestedId) && busStops.find(s => s.id === requestedId))
+            || busStops.find(s => s.displayName === 'Selska (→Z)');
+        if (initialStop) selectStop(initialStop);
     })
     .catch(err => {
         console.warn('Could not load bus stop data:', err);
