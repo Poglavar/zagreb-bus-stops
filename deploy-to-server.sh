@@ -11,6 +11,7 @@ echo "Deploying ${PROJECT_DIR} -> ${REMOTE_SSH}:${REMOTE_DIR}"
 ssh -i "$SSH_KEY" "$REMOTE_SSH" "mkdir -p '$REMOTE_DIR'"
 
 rsync -avz --delete --chmod=Fu=rw,Fgo=r,Du=rwx,Dgo=rx \
+  --exclude ".env" \
   --exclude ".git/" \
   --exclude ".DS_Store" \
   --exclude "*.md" \
